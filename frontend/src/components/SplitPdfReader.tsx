@@ -26,7 +26,8 @@ export const SplitPdfReader: React.FC<SplitPdfReaderProps> = ({
   const getPdfUrl = (url?: string) => {
     if (!url) return '';
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    return `http://localhost:8000${url.startsWith('/') ? '' : '/'}${url}`;
+    const backendHost = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    return `${backendHost}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
   const handleSendMessage = async (queryTextOverride?: string) => {

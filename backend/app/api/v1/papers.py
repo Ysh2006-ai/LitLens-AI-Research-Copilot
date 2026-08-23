@@ -17,7 +17,8 @@ from app.services.paper_intelligence_service import analyze_paper_content
 router = APIRouter(prefix="/papers", tags=["Papers"])
 
 def build_pdf_url(paper_id: str) -> str:
-    return f"http://localhost:8000{settings.API_V1_STR}/papers/{paper_id}/pdf"
+    backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+    return f"{backend_url}{settings.API_V1_STR}/papers/{paper_id}/pdf"
 
 @router.post("/upload", response_model=PaperResponse)
 async def upload_paper(
