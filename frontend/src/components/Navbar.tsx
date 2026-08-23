@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Layers, FileText, Cpu, GitCompare, HelpCircle, BookMarked, Plus, Menu, X } from 'lucide-react';
-import { Workspace } from '@/lib/types';
+import { Layers, FileText, Cpu, GitCompare, HelpCircle, BookMarked, Plus, Menu, X, LogOut, User as UserIcon } from 'lucide-react';
+import { Workspace, User } from '@/lib/types';
 
 interface NavbarProps {
   activeTab: string;
@@ -11,6 +11,8 @@ interface NavbarProps {
   activeWorkspace: Workspace | null;
   setActiveWorkspace: (ws: Workspace) => void;
   onOpenNewWorkspace: () => void;
+  currentUser: User | null;
+  onLogout: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -19,7 +21,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   workspaces,
   activeWorkspace,
   setActiveWorkspace,
-  onOpenNewWorkspace
+  onOpenNewWorkspace,
+  currentUser,
+  onLogout
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -107,6 +111,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Plus className="w-4 h-4" />
           </button>
 
+          {/* User Profile Badge & Logout */}
+          {currentUser && (
+            <div className="hidden sm:flex items-center gap-1.5 bg-[#E8EFE5] border border-[#C7D3C0] rounded-xl px-2.5 py-1">
+              <UserIcon className="w-3.5 h-3.5 text-[#3D4A39]" />
+              <span className="text-xs font-semibold text-[#3D4A39] max-w-[100px] truncate">
+                {currentUser.full_name || currentUser.email.split('@')[0]}
+              </span>
+              <button
+                onClick={onLogout}
+                className="ml-1 p-1 text-[#54664F] hover:text-rose-600 rounded-lg hover:bg-white transition"
+                title="Log Out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Mobile Menu Toggle Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -120,7 +141,23 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Mobile Drawer Dropdown Navigation */}
       {mobileMenuOpen && (
-        <div className="lg:hidden mt-3 pt-3 border-t border-[#E2DED4] bg-white rounded-2xl p-3 space-y-1 shadow-lg animate-in fade-in zoom-in-95 duration-150">
+        <div className="lg:hidden mt-3 pt-3 border-t border-[#E2DED4] bg-white rounded-2xl p-3 space-y-2 shadow-lg animate-in fade-in zoom-in-95 duration-150">
+          {/* User Profile info in mobile drawer */}
+          {currentUser && (
+            <div className="flex items-center justify-between p-2 rounded-xl bg-[#F7F4ED] border border-[#E2DED4] mb-2">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <UserIcon className="w-4 h-4 text-[#8FA28A]" />
+                <span className="text-xs font-bold text-[#2D372E] truncate">{currentUser.email}</span>
+              </div>
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-[#E2DED4] text-xs font-semibold text-rose-600"
+              >
+                <LogOut className="w-3 h-3" /> Logout
+              </button>
+            </div>
+          )}
+
           <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A877B] px-3 pb-1">
             Navigation Menu
           </p>

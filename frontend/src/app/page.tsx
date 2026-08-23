@@ -7,16 +7,29 @@ import { PaperIntelligenceModal } from '@/components/PaperIntelligenceModal';
 import { ComparisonMatrix } from '@/components/ComparisonMatrix';
 import { GapFinderWidget } from '@/components/GapFinderWidget';
 import { LiteratureReviewModal } from '@/components/LiteratureReviewModal';
-import { Workspace, Paper, AgentResponse } from '@/lib/types';
-import { api } from '@/lib/api';
+import { Workspace, Paper, AgentResponse, User } from '@/lib/types';
+import { api, setAuthToken } from '@/lib/api';
 import {
   Sparkles, Upload, FileText, Plus, Layers, Cpu, GitCompare,
-  HelpCircle, BookMarked, Trash2, Eye, CheckCircle2, ArrowRight, Zap
+  HelpCircle, BookMarked, Trash2, Eye, CheckCircle2, ArrowRight, Zap,
+  Lock, Mail, User as UserIcon, LogIn, UserPlus, ShieldCheck, ArrowRightCircle
 } from 'lucide-react';
 
 export default function Home() {
-  // State
+  // Navigation & User Auth State
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [initLoading, setInitLoading] = useState(true);
+
+  // Login / Signup Form State
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authFullName, setAuthFullName] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+
+  // App Data State
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [papers, setPapers] = useState<Paper[]>([]);
@@ -34,31 +47,31 @@ export default function Home() {
   const [agentRunning, setAgentRunning] = useState(false);
   const [agentResult, setAgentResult] = useState<AgentResponse | null>(null);
 
-  // Auto Init Auth & Fetch User Workspaces on Mount
+  // Init Auth on Mount
   useEffect(() => {
     initApp();
   }, []);
 
-  const ensureAuthenticated = async () => {
+  const initApp = async () => {
+    setInitLoading(true);
     try {
-      await api.getMe();
+      const me = await api.getMe();
+      setCurrentUser(me);
+      await loadUserWorkspaces();
     } catch {
-      try {
-        await api.login('researcher@litlens.ai', 'litlens2026');
-      } catch {
-        await api.register('researcher@litlens.ai', 'litlens2026', 'Lead Researcher');
-      }
+      setCurrentUser(null);
+    } finally {
+      setInitLoading(false);
     }
   };
 
-  const initApp = async () => {
+  const loadUserWorkspaces = async () => {
     try {
-      await ensureAuthenticated();
       const wsList = await api.listWorkspaces();
       setWorkspaces(wsList);
       setActiveWorkspace(wsList.length > 0 ? wsList[0] : null);
     } catch (err) {
-      console.error('App init error:', err);
+      console.error('Error loading workspaces:', err);
     }
   };
 
@@ -83,11 +96,46 @@ export default function Home() {
     }
   };
 
+  // Auth Handlers
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setAuthError('Please enter both email and password.');
+      return;
+    }
+
+    setAuthSubmitting(true);
+    try {
+      if (authMode === 'signup') {
+        await api.register(authEmail.trim(), authPassword.trim(), authFullName.trim() || undefined);
+      } else {
+        await api.login(authEmail.trim(), authPassword.trim());
+      }
+      const me = await api.getMe();
+      setCurrentUser(me);
+      await loadUserWorkspaces();
+    } catch (err: any) {
+      setAuthError(err.message || 'Authentication failed. Please check your credentials.');
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setAuthToken(null);
+    setCurrentUser(null);
+    setWorkspaces([]);
+    setActiveWorkspace(null);
+    setPapers([]);
+    setSelectedPaper(null);
+    setActiveTab('dashboard');
+  };
+
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWsName.trim()) return;
     try {
-      await ensureAuthenticated();
       const created = await api.createWorkspace(newWsName, newWsDesc);
       setWorkspaces(prev => [created, ...prev]);
       setActiveWorkspace(created);
@@ -160,6 +208,130 @@ export default function Home() {
     }
   };
 
+  // 1. Initial Loading Screen
+  if (initLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F7F4ED] text-[#2D372E]">
+        <img src="/litlens-logo.png" alt="LitLens Logo" className="h-16 w-auto object-contain mb-4 animate-pulse" />
+        <p className="text-xs font-semibold text-[#8FA28A]">Loading LitLens Workspace...</p>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated Login / Signup Screen
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center bg-[#F7F4ED] p-4 selection:bg-[#C7D3C0]">
+        <div className="w-full max-w-md bg-white p-8 rounded-3xl border border-[#E2DED4] shadow-xl space-y-6">
+          {/* Logo Header */}
+          <div className="text-center space-y-2">
+            <img src="/litlens-logo.png" alt="LitLens Logo" className="h-16 mx-auto object-contain" />
+            <p className="text-xs text-[#7A877B]">Your Evidence-Grounded AI Copilot for Research</p>
+          </div>
+
+          {/* Mode Switch Tabs */}
+          <div className="flex bg-[#F7F4ED] p-1 rounded-2xl border border-[#E2DED4]">
+            <button
+              onClick={() => { setAuthMode('login'); setAuthError(''); }}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${
+                authMode === 'login' ? 'bg-[#8FA28A] text-white shadow-xs' : 'text-[#54664F] hover:text-[#2D372E]'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => { setAuthMode('signup'); setAuthError(''); }}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${
+                authMode === 'signup' ? 'bg-[#8FA28A] text-white shadow-xs' : 'text-[#54664F] hover:text-[#2D372E]'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
+
+          {/* Auth Form */}
+          <form onSubmit={handleAuthSubmit} className="space-y-4">
+            {authMode === 'signup' && (
+              <div>
+                <label className="text-xs font-semibold text-[#4A554C] block mb-1">Full Name</label>
+                <div className="relative">
+                  <UserIcon className="w-4 h-4 text-[#8FA28A] absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    required
+                    value={authFullName}
+                    onChange={(e) => setAuthFullName(e.target.value)}
+                    placeholder="Dr. Abhishek Yadav"
+                    className="w-full bg-[#F7F4ED] border border-[#E2DED4] rounded-xl pl-9 pr-3 py-2.5 text-xs text-[#2D372E] outline-none focus:border-[#8FA28A] focus:ring-2 focus:ring-[#8FA28A]/20"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-semibold text-[#4A554C] block mb-1">Email Address</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-[#8FA28A] absolute left-3 top-3" />
+                <input
+                  type="email"
+                  required
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="researcher@litlens.ai"
+                  className="w-full bg-[#F7F4ED] border border-[#E2DED4] rounded-xl pl-9 pr-3 py-2.5 text-xs text-[#2D372E] outline-none focus:border-[#8FA28A] focus:ring-2 focus:ring-[#8FA28A]/20"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-[#4A554C] block mb-1">Password</label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-[#8FA28A] absolute left-3 top-3" />
+                <input
+                  type="password"
+                  required
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-[#F7F4ED] border border-[#E2DED4] rounded-xl pl-9 pr-3 py-2.5 text-xs text-[#2D372E] outline-none focus:border-[#8FA28A] focus:ring-2 focus:ring-[#8FA28A]/20"
+                />
+              </div>
+            </div>
+
+            {authError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
+                {authError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={authSubmitting}
+              className="w-full py-3 rounded-xl bg-[#C8A96B] hover:bg-[#B59453] text-white text-xs font-bold shadow-xs transition flex items-center justify-center gap-2"
+            >
+              {authSubmitting ? (
+                <Sparkles className="w-4 h-4 animate-spin" />
+              ) : authMode === 'login' ? (
+                <>
+                  <LogIn className="w-4 h-4" /> Sign In to My Account
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4" /> Create My Research ID
+                </>
+              )}
+            </button>
+          </form>
+
+          <p className="text-[11px] text-center text-[#7A877B]">
+            Your research data & papers are isolated to your private account.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Authenticated App Layout
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F4ED] text-[#2D372E] selection:bg-[#C7D3C0] selection:text-[#1E251E]">
       {/* Top Navigation */}
@@ -170,6 +342,8 @@ export default function Home() {
         activeWorkspace={activeWorkspace}
         setActiveWorkspace={setActiveWorkspace}
         onOpenNewWorkspace={() => setShowNewWorkspaceModal(true)}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       {/* Main Container */}
@@ -187,7 +361,7 @@ export default function Home() {
                 </div>
 
                 <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#2D372E]">
-                  Read, Understand & Find New Research Ideas
+                  Welcome back, {currentUser.full_name || currentUser.email.split('@')[0]}
                 </h1>
 
                 <p className="text-xs sm:text-sm text-[#4A554C] leading-relaxed max-w-2xl">
