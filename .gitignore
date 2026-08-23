@@ -18,9 +18,8 @@ venv/
 .venv/
 env/
 .env
-uploads/
-*.db
-*.sqlite
+storage/
+*.tsbuildinfo
 
 # IDEs
 .idea/

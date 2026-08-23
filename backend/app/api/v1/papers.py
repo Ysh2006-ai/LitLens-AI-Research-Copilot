@@ -17,8 +17,54 @@ from app.services.paper_intelligence_service import analyze_paper_content
 router = APIRouter(prefix="/papers", tags=["Papers"])
 
 def build_pdf_url(paper_id: str) -> str:
-    backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
-    return f"{backend_url}{settings.API_V1_STR}/papers/{paper_id}/pdf"
+    backend_url = os.getenv("BACKEND_URL", "").rstrip("/")
+    if backend_url:
+        return f"{backend_url}{settings.API_V1_STR}/papers/{paper_id}/pdf"
+    return f"{settings.API_V1_STR}/papers/{paper_id}/pdf"
+
+@router.get("/{paper_id}/pdf")
+def get_paper_pdf(paper_id: str, db: Session = Depends(get_db)):
+    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper record not found.")
+
+    # Auto-generate or restore PDF if file missing on disk (e.g. serverless environment or restart)
+    if not paper.pdf_path or not os.path.exists(paper.pdf_path):
+        paper_dir = os.path.join(settings.UPLOAD_DIR, paper.workspace_id)
+        os.makedirs(paper_dir, exist_ok=True)
+        pdf_file_path = os.path.join(paper_dir, f"{paper.id}.pdf")
+        
+        try:
+            import fitz
+            doc = fitz.open()
+            page = doc.new_page()
+            header_text = f"Title: {paper.title}\nAuthors: {paper.authors or 'Unknown'}\nVenue/Year: {paper.venue or ''} ({paper.publication_year or ''})\n\nABSTRACT:\n{paper.abstract or 'No abstract provided.'}\n\n"
+            
+            chunks = db.query(PaperChunk).filter(PaperChunk.paper_id == paper.id).order_by(PaperChunk.chunk_index).all()
+            if chunks:
+                header_text += "\n--- EXTRACTED PAPER CONTENT ---\n\n" + "\n\n".join([f"[Page {c.page_number} - {c.section_title}]\n{c.content}" for c in chunks])
+                
+            page.insert_text((50, 50), header_text[:2000])
+            remaining = header_text[2000:]
+            while remaining:
+                p = doc.new_page()
+                p.insert_text((50, 50), remaining[:2000])
+                remaining = remaining[2000:]
+                
+            doc.save(pdf_file_path)
+            doc.close()
+            
+            paper.pdf_path = pdf_file_path
+            db.commit()
+        except Exception as e:
+            print(f"Error auto-generating PDF fallback: {e}")
+            raise HTTPException(status_code=404, detail="PDF file not found and could not be generated.")
+
+    return FileResponse(
+        paper.pdf_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{paper.file_name or "paper.pdf"}"'}
+    )
 
 @router.post("/upload", response_model=PaperResponse)
 async def upload_paper(
@@ -176,6 +222,40 @@ def get_paper_pdf(paper_id: str, db: Session = Depends(get_db)):
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{paper.file_name}"'}
     )
+
+@router.post("/{paper_id}/reindex")
+def reindex_paper(paper_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    paper = db.query(Paper).join(Workspace).filter(Paper.id == paper_id, Workspace.user_id == current_user.id).first()
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found.")
+
+    if not os.path.exists(paper.pdf_path):
+        raise HTTPException(status_code=400, detail="PDF file no longer exists on server.")
+
+    # Re-extract and re-chunk with corrected page tracking
+    pdf_info = extract_pdf_data(paper.pdf_path)
+    semantic_chunks = create_semantic_chunks(pdf_info["chunks"])
+    chunk_texts = [c["content"] for c in semantic_chunks]
+    embeddings = generate_batch_embeddings(chunk_texts)
+
+    # Remove existing chunks for this paper
+    db.query(PaperChunk).filter(PaperChunk.paper_id == paper.id).delete()
+    db.commit()
+
+    for idx, c in enumerate(semantic_chunks):
+        chunk_obj = PaperChunk(
+            paper_id=paper.id,
+            workspace_id=paper.workspace_id,
+            chunk_index=c["chunk_index"],
+            content=c["content"],
+            page_number=c["page_number"],
+            section_title=c["section_title"],
+            embedding=embeddings[idx]
+        )
+        db.add(chunk_obj)
+
+    db.commit()
+    return {"message": f"Successfully re-indexed '{paper.title}' with {len(semantic_chunks)} accurate chunks."}
 
 @router.delete("/{paper_id}")
 def delete_paper(paper_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

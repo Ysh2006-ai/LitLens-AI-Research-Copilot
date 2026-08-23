@@ -69,33 +69,38 @@ def extract_pdf_data(file_path: str) -> Dict[str, Any]:
 def create_semantic_chunks(raw_chunks: List[Dict[str, Any]], max_chunk_words: int = 250) -> List[Dict[str, Any]]:
     """
     Groups raw text blocks into semantic chunks while maintaining exact page number and section title references.
+    Tracks starting page number for each chunk so that flushed chunks inherit the exact page where their text originates.
     """
     semantic_chunks = []
     chunk_index = 0
 
     current_chunk_words = []
-    current_page = 1
-    current_section = "Introduction"
+    chunk_start_page = None
+    chunk_start_section = None
 
     for block in raw_chunks:
         words = block["content"].split()
         if not words:
             continue
 
-        current_page = block["page_number"]
-        if block["section_title"]:
-            current_section = block["section_title"]
+        # Establish start page and section when beginning a new chunk
+        if chunk_start_page is None:
+            chunk_start_page = block["page_number"]
+            chunk_start_section = block.get("section_title") or "Main Text"
 
         if len(current_chunk_words) + len(words) > max_chunk_words:
             if current_chunk_words:
                 semantic_chunks.append({
                     "chunk_index": chunk_index,
                     "content": " ".join(current_chunk_words),
-                    "page_number": current_page,
-                    "section_title": current_section
+                    "page_number": chunk_start_page,
+                    "section_title": chunk_start_section
                 })
                 chunk_index += 1
                 current_chunk_words = []
+                # Reset start page and section for the new chunk starting with this block
+                chunk_start_page = block["page_number"]
+                chunk_start_section = block.get("section_title") or "Main Text"
 
         current_chunk_words.extend(words)
 
@@ -103,8 +108,8 @@ def create_semantic_chunks(raw_chunks: List[Dict[str, Any]], max_chunk_words: in
         semantic_chunks.append({
             "chunk_index": chunk_index,
             "content": " ".join(current_chunk_words),
-            "page_number": current_page,
-            "section_title": current_section
+            "page_number": chunk_start_page or 1,
+            "section_title": chunk_start_section or "Main Text"
         })
 
     return semantic_chunks

@@ -25,8 +25,19 @@ export const SplitPdfReader: React.FC<SplitPdfReaderProps> = ({
 
   const getPdfUrl = (url?: string) => {
     if (!url) return '';
+    const backendHost = (
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') ||
+      'http://localhost:8000'
+    ).replace(/\/$/, '');
+
+    // If stored URL points to localhost:8000, replace with active backend host for Vercel/production deployment
+    if (url.startsWith('http://localhost:8000') || url.startsWith('http://127.0.0.1:8000')) {
+      const path = url.replace(/^http:\/\/(localhost|127\.0\.0\.1):8000/, '');
+      return `${backendHost}${path}`;
+    }
+
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    const backendHost = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
     return `${backendHost}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
@@ -166,13 +177,13 @@ export const SplitPdfReader: React.FC<SplitPdfReaderProps> = ({
         {/* Chat Header */}
         <div className="flex items-center justify-between px-4 py-2.5 bg-[#F7F4ED] border-b border-[#E2DED4]">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-[#8FA28A]" />
+            <Sparkles className="w-4 h-4 text-[#8FA28A]" />
             <span className="text-xs font-bold uppercase tracking-wider text-[#2D372E]">
-              Ask AI & Get Page Proofs
+              AI Research Assistant
             </span>
           </div>
           <span className="px-2 py-0.5 text-[10px] font-semibold bg-[#E8EFE5] text-[#3D4A39] border border-[#C7D3C0] rounded-full">
-            Exact Proofs
+            Direct Answer
           </span>
         </div>
 
@@ -185,7 +196,7 @@ export const SplitPdfReader: React.FC<SplitPdfReaderProps> = ({
               </div>
               <div>
                 <p className="text-sm font-bold text-[#2D372E]">Ask any question about your paper</p>
-                <p className="text-xs text-[#7A877B] mt-0.5">Every answer shows the exact page number and text proof.</p>
+                <p className="text-xs text-[#7A877B] mt-0.5">Get accurate, concise, evidence-grounded research answers.</p>
               </div>
 
               {/* Sample Quick Prompt Chips */}
@@ -220,30 +231,6 @@ export const SplitPdfReader: React.FC<SplitPdfReaderProps> = ({
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{msg.content}</p>
-
-                  {/* Citations list */}
-                  {msg.citations && msg.citations.length > 0 && (
-                    <div className="mt-2.5 pt-2.5 border-t border-[#F7F4ED] space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#3D4A39] flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3 text-[#8FA28A]" /> Page Proofs ({msg.citations.length})
-                      </span>
-                      {msg.citations.map((cite, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() => handleJumpToCitation(cite)}
-                          className="p-2 rounded-xl bg-[#F7F4ED] hover:bg-[#E8EFE5] border border-[#E2DED4] cursor-pointer transition flex flex-col gap-0.5 group"
-                        >
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="font-semibold text-[#2D372E] truncate">{cite.paper_title}</span>
-                            <span className="px-1.5 py-0.2 bg-[#C7D3C0] text-[#2D372E] font-mono text-[9px] rounded group-hover:bg-[#8FA28A] group-hover:text-white transition">
-                              Pg {cite.page_number}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-[#4A554C] line-clamp-2 italic">"{cite.evidence_text}"</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             ))

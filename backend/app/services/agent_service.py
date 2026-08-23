@@ -19,7 +19,7 @@ def run_research_agent(db: Session, workspace_id: str, prompt: str) -> Dict[str,
     paper_catalog = [{"id": p.id, "title": p.title, "authors": p.authors} for p in papers]
 
     # RAG search tool call
-    retrieved = retrieve_relevant_chunks(db, workspace_id, prompt, top_k=6)
+    retrieved = retrieve_relevant_chunks(db, workspace_id, prompt, top_k=8)
     tools_used.append("retrieve_evidence")
 
     grounded = generate_grounded_answer(prompt, retrieved)

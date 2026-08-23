@@ -13,7 +13,7 @@ def retrieve_relevant_chunks(
     workspace_id: str,
     query: str,
     paper_ids: Optional[List[str]] = None,
-    top_k: int = 5
+    top_k: int = 8
 ) -> List[Dict[str, Any]]:
     """
     Retrieves the top_k most relevant paper chunks using pgvector vector similarity search.
@@ -62,11 +62,11 @@ def generate_grounded_answer(
 ) -> Dict[str, Any]:
     """
     Generates an evidence-grounded answer using Gemini LLM.
-    Strictly prevents hallucination and formats citations with paper_id, page_number, section_title, evidence_text.
+    Strictly prevents hallucination and formats citations with paper_id, page_number, section_title, exact_quote.
     """
     if not retrieved_chunks:
         return {
-            "answer": "Insufficient evidence found in the workspace papers to answer your query. Please upload relevant papers or broaden your prompt.",
+            "answer": "Insufficient evidence found in the workspace papers to answer your query. Please upload relevant research papers or broaden your search prompt.",
             "citations": []
         }
 
@@ -80,27 +80,27 @@ def generate_grounded_answer(
     formatted_context = "\n\n".join(context_blocks)
 
     system_prompt = """
-    You are LitLens, a world-class AI Research Assistant.
-    Your task is to answer the researcher's query STRICTLY based on the provided source contexts.
+    You are LitLens, an evidence-grounded AI Research Assistant.
+    Your absolute top priority is ACCURACY, EVIDENCE GROUNDING, and ZERO HALLUCINATION.
 
-    CRITICAL RULES:
-    1. Ground every factual claim directly in the provided sources.
-    2. NEVER invent citations, numbers, or details not present in the sources.
-    3. If the provided sources do NOT contain enough information to fully answer, state clearly what is known and state that evidence is insufficient for the rest.
-    4. For every claim, indicate which source numbers [Source X] support it.
-
-    In addition to your written response, provide a clean JSON array of citations that were directly used.
+    CRITICAL RULES FOR ZERO HALLUCINATION:
+    1. Base every single assertion STRICTLY and EXCLUSIVELY on the provided RETRIEVED EVIDENCE SOURCES.
+    2. NEVER extrapolate, guess, or invent numbers, formulas, datasets, performance metrics, or author claims not explicitly present in the sources.
+    3. If the provided sources do NOT contain sufficient information to answer the query, clearly state: "The uploaded paper(s) do not contain sufficient evidence to answer this question." Do not attempt to guess an answer.
+    4. Provide a clear, direct, professional Markdown explanation.
     """
 
     user_prompt = f"""
-    QUERY: {query}
+    RESEARCHER QUERY: {query}
 
-    RETRIEVED EVIDENCE SOURCES:
+    RETRIEVED PAPER SOURCES:
     {formatted_context}
 
-    Respond in JSON with two keys:
-    - "answer": Markdown formatted explanation with inline source brackets e.g. [Source 1]
-    - "used_source_indices": Array of integer source numbers used (e.g. [1, 3])
+    Respond ONLY in valid JSON matching this exact structure:
+    {{
+        "answer": "Clean, direct Markdown response explaining the answer based on paper evidence.",
+        "citations": []
+    }}
     """
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_KEY else None
@@ -113,33 +113,57 @@ def generate_grounded_answer(
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     response_mime_type="application/json",
-                    temperature=0.1
+                    temperature=0.0
                 )
             )
             import json
             res_data = json.loads(response.text)
-            used_indices = res_data.get("used_source_indices", list(range(1, len(retrieved_chunks) + 1)))
+            raw_citations = res_data.get("citations", [])
             
-            citations = []
-            for idx in used_indices:
-                if 1 <= idx <= len(retrieved_chunks):
-                    chunk = retrieved_chunks[idx - 1]
-                    citations.append({
+            processed_citations = []
+            seen_sources = set()
+
+            for item in raw_citations:
+                s_idx = item.get("source_index")
+                quote = item.get("exact_quote", "").strip()
+                if isinstance(s_idx, int) and 1 <= s_idx <= len(retrieved_chunks):
+                    if s_idx in seen_sources:
+                        continue
+                    seen_sources.add(s_idx)
+                    chunk = retrieved_chunks[s_idx - 1]
+                    
+                    # If quote is empty, use the first 180 chars of the chunk
+                    if not quote:
+                        quote = chunk["content"][:180] + "..."
+
+                    processed_citations.append({
                         "paper_id": chunk["paper_id"],
                         "paper_title": chunk["paper_title"],
                         "page_number": chunk["page_number"],
                         "section_title": chunk["section_title"],
-                        "evidence_text": chunk["content"][:200] + "..."
+                        "evidence_text": quote
                     })
+
+            # If model cited inline sources in answer text but omitted citations array, fallback gracefully
+            if not processed_citations and "[Source" in res_data.get("answer", ""):
+                for idx, chunk in enumerate(retrieved_chunks[:3], 1):
+                    if f"[Source {idx}]" in res_data.get("answer", ""):
+                        processed_citations.append({
+                            "paper_id": chunk["paper_id"],
+                            "paper_title": chunk["paper_title"],
+                            "page_number": chunk["page_number"],
+                            "section_title": chunk["section_title"],
+                            "evidence_text": chunk["content"][:180] + "..."
+                        })
 
             return {
                 "answer": res_data.get("answer", "No answer generated."),
-                "citations": citations
+                "citations": processed_citations
             }
         except Exception as e:
             print(f"Error in Gemini grounded answer generation: {e}")
 
-    # Heuristic fallback if LLM key is absent
+    # Heuristic fallback if LLM key is absent or call fails
     citations = []
     for c in retrieved_chunks[:2]:
         citations.append({
@@ -147,10 +171,10 @@ def generate_grounded_answer(
             "paper_title": c["paper_title"],
             "page_number": c["page_number"],
             "section_title": c["section_title"],
-            "evidence_text": c["content"][:200] + "..."
+            "evidence_text": c["content"][:180] + "..."
         })
 
     return {
-        "answer": f"Based on retrieved evidence from **{retrieved_chunks[0]['paper_title']}** (Page {retrieved_chunks[0]['page_number']}), the paper discusses: {retrieved_chunks[0]['content'][:300]}...",
+        "answer": f"Based on retrieved evidence from **{retrieved_chunks[0]['paper_title']}** (Page {retrieved_chunks[0]['page_number']}), the paper states: \"{retrieved_chunks[0]['content'][:250]}...\"",
         "citations": citations
     }

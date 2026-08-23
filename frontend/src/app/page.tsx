@@ -7,6 +7,7 @@ import { PaperIntelligenceModal } from '@/components/PaperIntelligenceModal';
 import { ComparisonMatrix } from '@/components/ComparisonMatrix';
 import { GapFinderWidget } from '@/components/GapFinderWidget';
 import { LiteratureReviewModal } from '@/components/LiteratureReviewModal';
+import { GeminiAgentChatbot } from '@/components/GeminiAgentChatbot';
 import { Workspace, Paper, AgentResponse, User } from '@/lib/types';
 import { api, setAuthToken } from '@/lib/api';
 import {
@@ -564,48 +565,14 @@ export default function Home() {
           />
         )}
 
-        {/* Tab 4: AI Research Agent */}
-        {activeTab === 'agent' && (
-          <div className="p-6 space-y-6 max-w-5xl mx-auto">
-            <div className="bg-white p-6 rounded-2xl border border-[#E2DED4] shadow-xs space-y-4">
-              <div className="flex items-center gap-2">
-                <Cpu className="w-5 h-5 text-[#8FA28A]" />
-                <h2 className="text-xl font-bold text-[#2D372E]">AI Research Assistant</h2>
-              </div>
-              <p className="text-xs text-[#7A877B]">
-                Ask any complex research question. The assistant will search all your papers, compare them, and find key takeaways.
-              </p>
-
-              <form onSubmit={handleRunAgent} className="flex gap-2">
-                <input
-                  type="text"
-                  value={agentPrompt}
-                  onChange={(e) => setAgentPrompt(e.target.value)}
-                  placeholder="Ask Assistant (e.g. Compare methodologies and find missing research ideas in my papers)..."
-                  className="flex-1 bg-[#F7F4ED] border border-[#E2DED4] focus:border-[#8FA28A] focus:ring-2 focus:ring-[#8FA28A]/20 rounded-xl px-4 py-2.5 text-xs text-[#2D372E] placeholder-[#7A877B] outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={agentRunning || !agentPrompt.trim() || !activeWorkspace}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#C8A96B] hover:bg-[#B59453] disabled:opacity-50 text-white font-semibold text-xs shadow-xs transition"
-                >
-                  {agentRunning ? <Sparkles className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                  Ask Assistant
-                </button>
-              </form>
-            </div>
-
-            {agentResult && (
-              <div className="p-6 bg-white rounded-2xl border border-[#C7D3C0] space-y-4 shadow-xs">
-                <div className="flex items-center justify-between border-b border-[#F7F4ED] pb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#3D4A39] flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-[#8FA28A]" /> Assistant Answer
-                  </span>
-                </div>
-
-                <p className="text-xs text-[#4A554C] leading-relaxed whitespace-pre-wrap">{agentResult.response}</p>
-              </div>
-            )}
+        {/* Tab 4: AI Research Assistant Chatbot */}
+        {activeTab === 'agent' && activeWorkspace && (
+          <div className="p-4 lg:p-6">
+            <GeminiAgentChatbot
+              workspaceId={activeWorkspace.id}
+              workspaceName={activeWorkspace.name}
+              papers={papers}
+            />
           </div>
         )}
 
