@@ -60,6 +60,7 @@ export default function Home() {
       await loadUserWorkspaces();
     } catch {
       setCurrentUser(null);
+      setAuthToken(null);
     } finally {
       setInitLoading(false);
     }
@@ -261,7 +262,7 @@ export default function Home() {
                     required
                     value={authFullName}
                     onChange={(e) => setAuthFullName(e.target.value)}
-                    placeholder="Dr. Abhishek Yadav"
+                    placeholder="Enter your full name"
                     className="w-full bg-[#F7F4ED] border border-[#E2DED4] rounded-xl pl-9 pr-3 py-2.5 text-xs text-[#2D372E] outline-none focus:border-[#8FA28A] focus:ring-2 focus:ring-[#8FA28A]/20"
                   />
                 </div>
@@ -277,7 +278,7 @@ export default function Home() {
                   required
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
-                  placeholder="researcher@litlens.ai"
+                  placeholder="name@company.com"
                   className="w-full bg-[#F7F4ED] border border-[#E2DED4] rounded-xl pl-9 pr-3 py-2.5 text-xs text-[#2D372E] outline-none focus:border-[#8FA28A] focus:ring-2 focus:ring-[#8FA28A]/20"
                 />
               </div>
@@ -317,7 +318,7 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  <UserPlus className="w-4 h-4" /> Create My Research ID
+                  <UserPlus className="w-4 h-4" /> Create My Account
                 </>
               )}
             </button>
