@@ -1,0 +1,29 @@
+# Operating System
+.DS_Store
+Thumbs.db
+
+# Node / Frontend
+node_modules/
+.next/
+build/
+out/
+dist/
+*.log
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+uploads/
+*.db
+*.sqlite
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
