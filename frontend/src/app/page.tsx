@@ -39,14 +39,21 @@ export default function Home() {
     initApp();
   }, []);
 
-  const initApp = async () => {
+  const ensureAuthenticated = async () => {
     try {
+      await api.getMe();
+    } catch {
       try {
-        await api.getMe();
+        await api.login('researcher@litlens.ai', 'litlens2026');
       } catch {
         await api.register('researcher@litlens.ai', 'litlens2026', 'Lead Researcher');
       }
+    }
+  };
 
+  const initApp = async () => {
+    try {
+      await ensureAuthenticated();
       const wsList = await api.listWorkspaces();
       setWorkspaces(wsList);
       setActiveWorkspace(wsList.length > 0 ? wsList[0] : null);
@@ -80,6 +87,7 @@ export default function Home() {
     e.preventDefault();
     if (!newWsName.trim()) return;
     try {
+      await ensureAuthenticated();
       const created = await api.createWorkspace(newWsName, newWsDesc);
       setWorkspaces(prev => [created, ...prev]);
       setActiveWorkspace(created);
