@@ -44,11 +44,12 @@ def get_paper_pdf(paper_id: str, db: Session = Depends(get_db)):
             if chunks:
                 header_text += "\n--- EXTRACTED PAPER CONTENT ---\n\n" + "\n\n".join([f"[Page {c.page_number} - {c.section_title}]\n{c.content}" for c in chunks])
                 
-            page.insert_text((50, 50), header_text[:2000])
+            rect = fitz.Rect(50, 50, 550, 780)
+            page.insert_textbox(rect, header_text[:2000])
             remaining = header_text[2000:]
             while remaining:
                 p = doc.new_page()
-                p.insert_text((50, 50), remaining[:2000])
+                p.insert_textbox(rect, remaining[:2000])
                 remaining = remaining[2000:]
                 
             doc.save(pdf_file_path)
