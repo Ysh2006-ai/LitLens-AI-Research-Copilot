@@ -3,7 +3,16 @@ import {
   ResearchGap, ResearchQuestion, LiteratureReview, AcademicSearchResult
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const getApiBaseUrl = () => {
+  let url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+  url = url.trim().replace(/\/+$/, '');
+  if (!url.endsWith('/api/v1')) {
+    url += '/api/v1';
+  }
+  return url;
+};
+
+const API_BASE = getApiBaseUrl();
 
 let authToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('litlens_token') : null;
 

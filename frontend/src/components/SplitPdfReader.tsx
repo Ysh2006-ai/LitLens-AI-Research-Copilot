@@ -27,9 +27,9 @@ export const SplitPdfReader: React.FC<SplitPdfReaderProps> = ({
     if (!url) return '';
     const backendHost = (
       process.env.NEXT_PUBLIC_BACKEND_URL ||
-      process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') ||
+      process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/v1\/?$/, '') ||
       'http://localhost:8000'
-    ).replace(/\/$/, '');
+    ).replace(/\/+$/, '');
 
     // If stored URL points to localhost:8000, replace with active backend host for Vercel/production deployment
     if (url.startsWith('http://localhost:8000') || url.startsWith('http://127.0.0.1:8000')) {
