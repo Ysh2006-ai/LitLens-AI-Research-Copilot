@@ -1,10 +1,9 @@
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from google import genai
-from google.genai import types
 
 from app.core.config import settings
+from app.core.llm import generate_llm_content, parse_json_from_llm
 from app.models import PaperChunk, Paper
 from app.services.embedding_service import generate_embedding
 
@@ -103,27 +102,23 @@ def generate_grounded_answer(
     }}
     """
 
-    client = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_KEY else None
+    raw_res = generate_llm_content(
+        prompt=user_prompt,
+        system_instruction=system_prompt,
+        json_output=True,
+        temperature=0.0
+    )
 
-    if client:
-        try:
-            response = client.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    response_mime_type="application/json",
-                    temperature=0.0
-                )
-            )
-            import json
-            res_data = json.loads(response.text)
+    if raw_res:
+        res_data = parse_json_from_llm(raw_res)
+        if res_data and isinstance(res_data, dict):
             raw_citations = res_data.get("citations", [])
-            
             processed_citations = []
             seen_sources = set()
 
             for item in raw_citations:
+                if not isinstance(item, dict):
+                    continue
                 s_idx = item.get("source_index")
                 quote = item.get("exact_quote", "").strip()
                 if isinstance(s_idx, int) and 1 <= s_idx <= len(retrieved_chunks):
@@ -131,8 +126,6 @@ def generate_grounded_answer(
                         continue
                     seen_sources.add(s_idx)
                     chunk = retrieved_chunks[s_idx - 1]
-                    
-                    # If quote is empty, use the first 180 chars of the chunk
                     if not quote:
                         quote = chunk["content"][:180] + "..."
 
@@ -144,7 +137,6 @@ def generate_grounded_answer(
                         "evidence_text": quote
                     })
 
-            # If model cited inline sources in answer text but omitted citations array, fallback gracefully
             if not processed_citations and "[Source" in res_data.get("answer", ""):
                 for idx, chunk in enumerate(retrieved_chunks[:3], 1):
                     if f"[Source {idx}]" in res_data.get("answer", ""):
@@ -160,10 +152,8 @@ def generate_grounded_answer(
                 "answer": res_data.get("answer", "No answer generated."),
                 "citations": processed_citations
             }
-        except Exception as e:
-            print(f"Error in Gemini grounded answer generation: {e}")
 
-    # Heuristic fallback if LLM key is absent or call fails
+    # Dynamic fallback grounded directly in top retrieved chunk
     citations = []
     for c in retrieved_chunks[:2]:
         citations.append({
@@ -175,6 +165,6 @@ def generate_grounded_answer(
         })
 
     return {
-        "answer": f"Based on retrieved evidence from **{retrieved_chunks[0]['paper_title']}** (Page {retrieved_chunks[0]['page_number']}), the paper states: \"{retrieved_chunks[0]['content'][:250]}...\"",
+        "answer": f"Based on retrieved evidence from **{retrieved_chunks[0]['paper_title']}** (Section: {retrieved_chunks[0]['section_title']}, Page {retrieved_chunks[0]['page_number']}):\n\n\"{retrieved_chunks[0]['content'][:350]}\"",
         "citations": citations
     }
